@@ -1,0 +1,55 @@
+/* Keep TOC sidebar, reduce margins, scale figures 30% smaller */
+
+/* Main container */
+.quarto-container {
+  max-width: 95% !important;
+  margin: 0 auto !important;
+  padding: 0 1% !important;
+}
+
+/* Main content area */
+#quarto-content main {
+  padding-left: 2% !important;
+  padding-right: 2% !important;
+  max-width: none !important;
+}
+
+/* When TOC is present */
+.sidebar-right .content {
+  margin-right: 280px !important;
+  padding-right: 1% !important;
+  max-width: none !important;
+}
+
+.sidebar-right .sidebar {
+  width: 260px !important;
+  right: 10px !important;
+}
+
+/* Scale figures 30% smaller while keeping quality */
+.cell-output-display {
+  max-width: 100% !important;
+  width: 100% !important;
+  overflow: hidden !important;
+  transform: scale(0.7) !important;
+  transform-origin: left top !important;
+  margin-bottom: -50px !important;
+}
+
+.quarto-figure {
+  max-width: 100% !important;
+  width: 100% !important;
+  transform: scale(0.7) !important;
+  transform-origin: left top !important;
+  margin-bottom: -50px !important;
+}
+
+/* Prevent horizontal scroll */
+html, body {
+  overflow-x: hidden !important;
+}
+
+/* Additional styling for professional look */
+.navbar-brand {
+  font-weight: 600;
+}

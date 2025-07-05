@@ -1,0 +1,39 @@
+project:
+  type: website
+  output-dir: docs
+
+author: "Jakub Marciniak"
+
+website:
+  title: "Poznań Rental Market Analysis"
+  description: "Analysis of rental market trends in Poznań - May 2025"
+  navbar:
+    title: "Poznań Rental Analysis"
+    left:
+      - href: index.qmd
+        text: "Report"
+    right:
+      - icon: github
+        href: https://github.com/yourusername/poznan-rental-analysis  # Update with your repo URL
+  page-footer:
+    center: "© 2025 Jakub Marciniak | Business Intelligence Developer"
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-location: right
+    code-fold: true
+    code-summary: "Show code"
+    fig-width: 10
+    fig-height: 6.5
+    embed-resources: true  # Changed for better web performance
+    standalone: true
+    self-contained: true
+    page-layout: full
+
+execute:
+  warning: false
+  message: false
+  fig-responsive: true
