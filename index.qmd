@@ -28,7 +28,9 @@ format:
     code-summary: "Show code"
     fig-width: 10
     fig-height: 6.5
-    embed-resources: false  # Changed for better web performance
+    embed-resources: true  # Changed for better web performance
+    standalone: true
+    self-contained: true
     page-layout: full
     css: |
       /* Keep TOC sidebar, reduce margins, scale figures 30% smaller */
