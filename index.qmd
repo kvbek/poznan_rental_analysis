@@ -1,0 +1,1284 @@
+---
+project:
+  type: website
+  output-dir: docs
+
+website:
+  title: "Poznań Rental Market Analysis"
+  description: "Analysis of rental market trends in Poznań - May 2025"
+  author: "Jakub Marciniak"
+  navbar:
+    title: "Poznań Rental Analysis"
+    left:
+      - href: index.qmd
+        text: "Report"
+    right:
+      - icon: github
+        href: https://github.com/yourusername/poznan-rental-analysis  # Update with your repo URL
+  page-footer:
+    center: "© 2025 Jakub Marciniak | Business Intelligence Developer"
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-location: right
+    code-fold: true
+    code-summary: "Show code"
+    fig-width: 10
+    fig-height: 6.5
+    embed-resources: false  # Changed for better web performance
+    page-layout: full
+    css: |
+      /* Keep TOC sidebar, reduce margins, scale figures 30% smaller */
+      
+      /* Main container */
+      .quarto-container {
+        max-width: 95% !important;
+        margin: 0 auto !important;
+        padding: 0 1% !important;
+      }
+      
+      /* Main content area */
+      #quarto-content main {
+        padding-left: 2% !important;
+        padding-right: 2% !important;
+        max-width: none !important;
+      }
+      
+      /* When TOC is present */
+      .sidebar-right .content {
+        margin-right: 280px !important;
+        padding-right: 1% !important;
+        max-width: none !important;
+      }
+      
+      .sidebar-right .sidebar {
+        width: 260px !important;
+        right: 10px !important;
+      }
+      
+      /* Scale figures 30% smaller while keeping quality */
+      .cell-output-display {
+        max-width: 100% !important;
+        width: 100% !important;
+        overflow: hidden !important;
+        transform: scale(0.7) !important;
+        transform-origin: left top !important;
+        margin-bottom: -50px !important;
+      }
+      
+      .quarto-figure {
+        max-width: 100% !important;
+        width: 100% !important;
+        transform: scale(0.7) !important;
+        transform-origin: left top !important;
+        margin-bottom: -50px !important;
+      }
+      
+      /* Prevent horizontal scroll */
+      html, body {
+        overflow-x: hidden !important;
+      }
+      
+      /* Additional styling for professional look */
+      .navbar-brand {
+        font-weight: 600;
+      }
+
+execute:
+  warning: false
+  message: false
+  fig-responsive: true
+---
+
+## Executive Summary
+
+Poznań's rental market has emerged as one of **Poland's most attractive investment destinations**, driven by strong fundamentals including a growing student population, expanding tech sector, and strategic location in western Poland. With over **100,000 students** and increasing numbers of young professionals, rental demand remains consistently high while supply struggles to keep pace.
+
+*The analysis was performed on May 25th and contains all available listings in Poznan region at that point of time.*
+
+## Setup and Data Loading
+
+```{python}
+#| label: setup
+#| code-summary: "Import libraries and load data"
+
+import pandas as pd
+import matplotlib.pyplot as plt
+from highlight_text import ax_text, fig_text
+from drawarrow import ax_arrow, fig_arrow
+from pypalettes import load_cmap
+import geopandas as gpd
+from pyfonts import load_font
+import numpy as np
+import ast
+import seaborn as sns
+
+plt.rcParams['figure.dpi'] = 72          # Lower DPI to reduce file size
+plt.rcParams['savefig.dpi'] = 72         # Lower save DPI
+plt.rcParams['savefig.bbox'] = 'tight'   # Tight bounding box
+
+# Load custom fonts
+poppins_light = load_font("https://github.com/google/fonts/blob/main/ofl/poppins/Poppins-Light.ttf?raw=true")
+poppins_bold = load_font("https://github.com/google/fonts/blob/main/ofl/poppins/Poppins-Bold.ttf?raw=true")
+
+# Load color palettes
+cmap = load_cmap("Semicossyphus_pulcher", reverse=True)
+cmap_unreversed = load_cmap("Semicossyphus_pulcher", reverse=False)
+cmap_x85 = load_cmap("X85", reverse=True)
+
+# Load and prepare data
+df = pd.read_csv('data/listings_cleaned_data.csv')
+df['Dzielnica'] = df['Dzielnica'].replace('Jeżyce', 'Jezyce')
+
+print(f"Total number of listings: {len(df):,}")
+```
+
+## Market Overview
+
+### Key Market Insights
+
+These distributions reveal Poznań's rental market is **dominated by compact, affordable properties**. The majority of apartments fall between **40-50 m²**, with corresponding rents clustered in the **2,000-3,000 PLN range**. This tight correlation indicates a highly efficient market optimized for a specific demographic — likely students and young professionals who prioritize affordability and location over space.
+
+The market has essentially standardized around a **"sweet spot" of ~45 m² apartments at ~2,500 PLN monthly rent**. Properties above 80 m² or 4,000 PLN represent a small niche segment, suggesting potential opportunities in the premium rental market remain underexplored.
+
+```{python}
+#| label: market-overview
+#| fig-cap: "Distribution of apartment sizes and rental prices in Poznań"
+#| code-summary: "Create market overview histograms"
+
+# Filter extreme outliers
+trimmed_df = df[df["Powierzchnia"] < 500]
+
+fig, axs = plt.subplots(ncols=2, figsize=(14, 7))
+
+def style_histogram_axes(ax, xlabel, fontsize=9, tick_font=poppins_light):
+    """Apply common styling to histogram axes"""
+    ax.set_xlabel(xlabel, fontsize=fontsize, font=poppins_light)
+    ax.spines[['top', 'right']].set_visible(False)
+    ax.tick_params(axis='both', labelsize=fontsize, length=0)
+    
+    if tick_font:
+        for tick in ax.get_xticklabels():
+            tick.set_font(tick_font)
+            tick.set_fontsize(fontsize)
+        for tick in ax.get_yticklabels():
+            tick.set_font(tick_font)
+            tick.set_fontsize(fontsize)
+
+# Common histogram parameters
+hist_params = {
+    'bins': 25,
+    'color': cmap(5),
+    'edgecolor': 'black'
+}
+
+# Chart 1: Distribution of area sizes
+ax_text(
+    ax=axs[0], 
+    x=85, y=250, 
+    s="<The most common> area range is \nbetween 40 and 50 m²", 
+    fontsize=14, 
+    font=poppins_light,
+    highlight_textprops=[{"color": 'black', 'font': poppins_bold}]
+)
+
+axs[0].hist(trimmed_df["Powierzchnia"].dropna(), **hist_params)
+style_histogram_axes(axs[0], "Area (m²)")
+axs[0].set_xlim(0, 250)
+
+# Custom x-axis labels
+labels_old = [0, 50, 100, 150, 200, 250]
+labels_new = ["", "50", "100", "150", "200", "250"]
+axs[0].set_xticks(labels_old, labels=labels_new)
+
+ax_arrow([115, 260], [55, 325], ax=axs[0], color='black', radius=0.5)
+
+# Chart 2: Distribution of rent prices
+hist_params['bins'] = 30
+axs[1].hist(df["Czynsz najmu"].dropna(), **hist_params)
+style_histogram_axes(axs[1], "Price (PLN)")
+
+# Custom x-axis labels for price chart
+labels_old = [2000, 4000, 6000, 8000, 10000, 12000, 14000, 16000]
+labels_new = ['2k', '4k', '6k', '8k', '10k', '12k', '14k', '16k']
+axs[1].set_xticks(labels_old, labels=labels_new)
+
+ax_text(
+    ax=axs[1],
+    x=4000, y=352, 
+    s="<The most popular> price range for \nlistings in <Poznań> is <2000-3000 PLN>", 
+    fontsize=14, 
+    color='black',
+    font=poppins_light,
+    highlight_textprops=[{'color': 'black', 'font': poppins_bold}] * 3
+)
+
+ax_arrow([9000, 360], [3000, 460], ax=axs[1], color='black', radius=0.5)
+
+plt.tight_layout()
+plt.show()
+```
+
+## District Analysis
+
+### District-Level Pricing Analysis
+
+**Stare Miasto emerges as the premium district** with total monthly costs reaching **2,759 PLN**, reflecting its desirability as Poznań's historic center with proximity to major attractions and business districts. The variation across districts is relatively modest, with most areas falling within a **200 PLN range** of each other.
+
+**Grunwald leads in base rent costs** despite having lower total expenses than Stare Miasto, suggesting more favorable administrative fee structures. Meanwhile, **Nowe Miasto and Jeżyce offer the most affordable options** at around 2,630-2,640 PLN total monthly cost, making them attractive for budget-conscious tenants.
+
+```{python}
+#| label: district-pricing
+#| fig-cap: "Average rental costs by district (rent + administrative fees)"
+#| code-summary: "Analyze district-level pricing"
+
+df_by_districts = df.groupby("Dzielnica")[["Czynsz najmu", "Czynsz administracyjny", "Powierzchnia"]].mean().sort_values("Czynsz najmu", ascending=False).head(10)
+
+fig, ax = plt.subplots(figsize=(12, 8))
+
+ax_text(
+    x=-0.5, y=5000,
+    size=20,
+    ax=ax,
+    s="<Stare Miasto> is the <most expensive> district in Poznań",
+    color="black",
+    font=poppins_light,
+    highlight_textprops=[
+        {"font": poppins_bold},
+        {"color": "darkred", "font": poppins_bold},
+    ]
+)
+
+ax_text(
+    x=-0.5, y=4700,
+    size=14,
+    ax=ax,
+    s="An average sum of <Rent> and <Administrative rent>",
+    color="black",
+    font=poppins_light,
+    highlight_textprops=[
+        {"color": cmap(2), "font": poppins_bold},
+        {"color": cmap(4), "font": poppins_bold},
+    ]
+)
+
+# Create stacked bar chart
+ax.bar(
+    df_by_districts.index, 
+    df_by_districts["Czynsz najmu"], 
+    color=cmap(4),
+    edgecolor=cmap(4),
+    linewidth=1,
+    label="Base Rent"
+)
+
+ax.bar(
+    df_by_districts.index, 
+    df_by_districts["Czynsz administracyjny"], 
+    color=cmap(1), 
+    bottom=df_by_districts["Czynsz najmu"],
+    edgecolor=cmap(1),
+    linewidth=1,
+    label="Administrative Rent"
+)
+
+# Add total labels
+total_rent = df_by_districts["Czynsz najmu"] + df_by_districts["Czynsz administracyjny"]
+for i, total in enumerate(total_rent):
+    label = f"{total:,.0f}"
+    ax.text(
+        x=i, y=total + 100, s=label, ha='center', va='bottom',
+        fontsize=10, color='black', font=poppins_light
+    )
+
+ax.spines[:].set_visible(False)
+ax.get_yaxis().set_visible(False)
+ax.tick_params(axis='x', labelsize=10, length=0, rotation=0)
+
+for tick in ax.get_xticklabels():
+    tick.set_font(poppins_light)
+    tick.set_fontsize(10)
+
+plt.tight_layout()
+plt.show()
+```
+
+### Market Share by District
+
+**Stare Miasto captures nearly 30% of the rental market**, establishing itself as the dominant supply hub in Poznań. This substantial market share, combined with **Grunwald's 26%**, means these two districts control **over half of all rental listings** in the city.
+
+```{python}
+#| label: market-share-map
+#| fig-cap: "Geographic distribution of rental listings across Poznań districts"
+#| code-summary: "Create market share visualization on map"
+
+# Prepare aggregated data
+agg_df = df.groupby('Dzielnica').agg(
+    count=('Dzielnica', 'size'),
+    avg_total_rent=('Czynsz najmu', 'mean'),
+    avg_powierzchnia=('Powierzchnia', 'mean'),
+    avg_pokoje=('Liczba pokoi', 'mean'),
+    avg_kaucja=('Kaucja', 'mean'),
+    avg_pietro=('Budynek Piętro', 'mean')
+).reset_index()
+
+# Load geographic data and merge
+poznan = gpd.read_file('resources/poznan/dzielnice.shp')
+merged_df = pd.merge(poznan, agg_df, left_on="Dzielnica", right_on="Dzielnica", how="left")
+
+legend_settings = {
+    'shrink': 0.5,
+    'orientation': "vertical",
+    'aspect': 10,
+    'pad': 0.1,
+}
+
+fig, ax = plt.subplots(figsize=(12, 10))
+
+merged_df.plot(
+    column='count', ax=ax, legend=True, cmap=cmap, 
+    legend_kwds=legend_settings
+)
+
+fig_text(
+    x=0.15, y=0.95,
+    s="<Stare Miasto> <leads> Poznań's rental market",
+    size=23,
+    font=poppins_light,
+    highlight_textprops=[
+        {"color": cmap(4), "font": poppins_bold},
+        {"color": "darkred", "font": poppins_bold},
+    ],
+)
+
+fig_text(
+    x=0.15, y=0.9,
+    s="with <29%> of all available listings, but <Grunwald> follows closely behind",
+    size=14,
+    font=poppins_light,
+    highlight_textprops=[
+        {"color": cmap(4), "font": poppins_bold},
+        {"color": cmap(4), "font": poppins_bold},
+    ],
+)
+
+# Add district labels and percentages
+for idx, row in merged_df.iterrows():
+    if pd.notna(row['count']):
+        font_color = "white" if row['count'] > 250 else "black"
+        point = row.geometry.representative_point()
+        
+        ax_text(
+            point.x+0.004, point.y, 
+            f"{str(row['Dzielnica'])}", 
+            fontsize=8, color=font_color, ha='center',
+            font=poppins_light, ax=ax
+        )
+        
+        ax_text(
+            point.x+0.005, point.y+0.01, 
+            f"{(row['count'] / len(df) * 100):.0f}%", 
+            fontsize=10, color=font_color, ha='center',
+            font=poppins_light, ax=ax
+        )
+
+fig_text(
+    x=0.15, y=0.05,
+    s="<Note:> The results were rounded to the nearest whole number. Due to this, the sum of all values may not equal 100%", 
+    fontsize=9, font=poppins_light,
+    highlight_textprops=[{"color": 'black','font': poppins_bold}]
+)
+
+ax.axis("off")
+plt.tight_layout()
+plt.show()
+```
+
+## Property Characteristics
+
+### Room Configuration Preferences
+
+**Two-room apartments dominate Poznań's rental market** with an overwhelming **53% market share**, confirming the city's orientation toward compact living solutions. This preference aligns perfectly with the earlier findings about apartment sizes clustering around 40-50 m².
+
+```{python}
+#| label: room-distribution
+#| fig-cap: "Distribution of apartments by number of rooms"
+#| code-summary: "Analyze room configuration preferences"
+
+df_rooms = df.groupby("Liczba pokoi").size() / len(df) * 100
+df_rooms = df_rooms.round(0).astype(int)
+
+fig, ax = plt.subplots(figsize=(12, 7))
+
+ax_text(
+    ax=ax, x=3, y=40, 
+    s="<Two-room apartments> <dominate> \nwith <53%> of Poznań's rental market", 
+    font=poppins_light, fontsize=18, 
+    highlight_textprops=[
+        {"color": 'black','font': poppins_bold},
+        {"color": 'darkred','font': poppins_bold},
+        {"color": 'black','font': poppins_bold},
+    ]
+)
+
+# Add percentage labels on bars
+for i in range(len(df_rooms)):
+    if df_rooms.values[i] > 0:
+        ax_text(
+            ax=ax, x=i+1, y=df_rooms.values[i]+ 2, 
+            s=f"{df_rooms.values[i]:,}%", 
+            fontsize=10, color='black', font=poppins_light, ha='center'
+        )
+
+ax.bar(
+    df_rooms.index, df_rooms.values, 
+    color=cmap(4), edgecolor=cmap(3), linewidth=1
+)
+
+ax.spines[["top", "left", "right"]].set_visible(False)
+ax.get_yaxis().set_visible(False)
+ax.tick_params(axis='both', labelsize=10, length=0, pad=10)
+
+for tick in ax.get_xticklabels():
+    tick.set_font(poppins_light)
+    tick.set_fontsize(12)
+
+ax_text(
+    ax=ax, x=0.6, y=-7, 
+    s="<Note:> The results were rounded to the nearest whole number. Due to this, the sum of all values may not equal 100%", 
+    fontsize=9, font=poppins_light,
+    highlight_textprops=[{"color": 'black','font': poppins_bold}]
+)
+
+plt.tight_layout()
+plt.show()
+```
+
+### Geographic Premium Analysis
+
+**Grunwald establishes itself as Poznań's premium rental district**, commanding both the highest deposits (6,105 PLN) and offering the largest average apartment sizes (69 m²). This **69% size advantage over the smallest units** demonstrates clear market segmentation between premium and standard offerings.
+
+```{python}
+# First Chart - Deposits by District
+#| label: deposits-by-district
+#| fig-cap: "Average deposit amounts by district"
+#| code-summary: "Deposits across Poznań districts"
+
+legend_settings = {
+    'shrink': 0.5, 'orientation': "vertical", 'aspect': 10, 
+    'pad': 0.1, 'location': "left",
+}
+
+fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+
+fig_text(
+    x=0.5, y=0.95,
+    s="Premium space comes at a cost: <Grunwald> leads in both <apartment size> and <deposits>",
+    size=18, font=poppins_light, ha='center',
+    highlight_textprops=[
+        {"color": cmap(4), "font": poppins_bold},
+        {"color": cmap(4), "font": poppins_bold},
+        {"color": cmap(4), "font": poppins_bold}
+    ]
+)
+
+merged_df.plot(
+    column='avg_kaucja', ax=ax, legend=True, cmap=cmap, 
+    legend_kwds=legend_settings
+)
+
+for idx, row in merged_df.iterrows():
+    if pd.notna(row['avg_kaucja']):
+        font_color = "white" if row['avg_kaucja'] > 5000 else "black"
+        point = row.geometry.representative_point()
+        
+        ax_text(
+            point.x+0.004, point.y, 
+            f"{str(row['Dzielnica'])}", 
+            fontsize=8, color=font_color, ha='center',
+            font=poppins_light, ax=ax
+        )
+        ax_text(
+            point.x+0.007, point.y+0.01, 
+            f"{row['avg_kaucja']:,.0f} PLN", 
+            fontsize=10, color=font_color, ha='center',
+            font=poppins_light, ax=ax
+        )
+
+ax.axis("off")
+plt.tight_layout()
+plt.show()
+
+# Second Chart - Apartment Sizes by District
+#| label: apartment-sizes-by-district
+#| fig-cap: "Average apartment sizes by district"
+#| code-summary: "Apartment areas across Poznań districts"
+
+legend_settings = {
+    'shrink': 0.5, 'orientation': "vertical", 'aspect': 10, 
+    'pad': 0.1, 'location': "left",
+}
+
+fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+
+fig_text(
+    x=0.5, y=0.95,
+    s="Spacious living comes at a premium: <Grunwald> offers the largest <apartments>",
+    size=18, font=poppins_light, ha='center',
+    highlight_textprops=[
+        {"color": cmap(4), "font": poppins_bold},
+        {"color": cmap(4), "font": poppins_bold},
+    ]
+)
+
+merged_df.plot(
+    column='avg_powierzchnia', ax=ax, legend=True, cmap=cmap,
+    legend_kwds=legend_settings
+)
+
+for idx, row in merged_df.iterrows():
+    if pd.notna(row['avg_powierzchnia']):
+        font_color = "white" if row['avg_powierzchnia'] > 50 else "black"
+        point = row.geometry.representative_point()
+        
+        ax_text(
+            point.x+0.004, point.y, 
+            f"{str(row['Dzielnica'])}", 
+            fontsize=8, color=font_color, ha='center',
+            font=poppins_light, ax=ax
+        )
+        ax_text(
+            point.x+0.007, point.y+0.01, 
+            f"{row['avg_powierzchnia']:,.0f} m²", 
+            fontsize=10, color=font_color, ha='center',
+            font=poppins_light, ax=ax
+        )
+
+ax.axis("off")
+plt.tight_layout()
+plt.show()
+```
+
+### Subdistrict Analysis
+
+Based on this subdistrict analysis, several key patterns emerge showing **Market Segmentation is Clear**: The chart reveals distinct pricing tiers across Poznań's districts. Stare Miasto (Old Town) consistently commands premium prices, with most subdistricts clustering in the 2,500-4,500 PLN rent range and requiring deposits of 3,000-4,000 PLN.
+
+```{python}
+#| label: subdistrict-analysis
+#| fig-cap: "Rent vs. deposit correlation across subdistricts (bubble size = market activity)"
+#| code-summary: "Analyze subdistrict patterns"
+
+# Group by both district and subdistrict
+subdistrict_summary = df.groupby(['Dzielnica', 'Obszar w dzielnicy']).agg({
+    'Kaucja': 'mean',
+    'Czynsz najmu': 'mean',
+    'Powierzchnia': 'mean',
+    'Dzielnica': 'count'
+}).round(0)
+
+subdistrict_summary.columns = ['avg_deposit', 'avg_rent', 'avg_size', 'listing_count']
+subdistrict_summary = subdistrict_summary.reset_index()
+
+fig, ax = plt.subplots(figsize=(14, 9))
+
+# Create color mapping for districts
+districts = subdistrict_summary['Dzielnica'].unique()
+district_colors = {district: cmap(i/(len(districts)-1)) for i, district in enumerate(districts)}
+
+# Create scatter plot for each district
+for district in districts:
+    district_data = subdistrict_summary[subdistrict_summary['Dzielnica'] == district]
+    
+    ax.scatter(
+        x=district_data['avg_rent'],
+        y=district_data['avg_deposit'], 
+        s=district_data['listing_count'] * 5,
+        color=[district_colors[district]] * len(district_data),
+        label=district,
+        edgecolors='black',
+        linewidth=0.8,
+        alpha=0.8
+    )
+
+ax.set_xlabel('Average Rent Price (PLN)', fontsize=12, font=poppins_light)
+ax.set_ylabel('Average Deposit Amount (PLN)', fontsize=12, font=poppins_light)
+ax.spines[['top', 'right']].set_visible(False)
+ax.grid(True, alpha=0.3, linestyle='--')
+
+for tick in ax.get_xticklabels() + ax.get_yticklabels():
+    tick.set_font(poppins_light)
+
+# Create custom legend
+legend_elements = []
+for district, color in district_colors.items():
+    legend_elements.append(
+        plt.scatter([], [], color=color, s=100, label=district,
+            edgecolors='black', linewidth=0.8, alpha=0.8)
+    )
+
+legend = ax.legend(
+    handles=legend_elements, labels=list(district_colors.keys()),
+    bbox_to_anchor=(1.02, 1), loc='upper left', 
+    fontsize=10, frameon=False, markerscale=1
+)
+
+for text in legend.get_texts():
+    text.set_font(poppins_light)
+
+fig_text(
+    x=0.13, y=0.98,
+    s="<Subdistrict Analysis>: Each district shows distinct pricing patterns",
+    size=23, font=poppins_light,
+    highlight_textprops=[{"color": cmap(4), "font": poppins_bold}]
+)
+
+fig_text(
+    x=0.25, y=0,
+    s="<Bubble size> indicates market activity      <Colors> represent districts      <Each point> shows a subdistrict",
+    size=9, font=poppins_light, color="black",
+    highlight_textprops=[
+        {"color": 'black', 'font': poppins_bold},
+        {"color": 'black', 'font': poppins_bold},
+        {"color": 'black', 'font': poppins_bold}
+    ]
+)
+
+plt.tight_layout()
+plt.show()
+```
+
+## Building Characteristics
+
+### Historical Construction Periods
+
+**Contemporary Buildings dominate Poznań's Rental Market**. The distribution of construction periods across districts reveals interesting patterns about the city's development and rental stock composition.
+
+```{python}
+#| label: construction-periods
+#| fig-cap: "Distribution of construction periods across districts"
+#| code-summary: "Analyze building age distribution"
+
+def categorize_year(year):
+    if pd.isna(year):
+        return "Unknown"
+    elif year < 1939:
+        return "Pre-war"
+    elif 1945 <= year <= 1970:
+        return "Post-war Reconstruction"
+    elif 1971 <= year <= 1989:
+        return "Communist Era"
+    elif 1990 <= year <= 2010:
+        return "Modern Poland"
+    elif year >= 2011:
+        return "Contemporary"
+    else:
+        return "War Period (1939-1944)"
+
+df['Year_Category'] = df['Rok budowy'].apply(categorize_year)
+
+# Calculate unknown percentage
+total_listings = len(df)
+unknown_count = len(df[df['Year_Category'] == 'Unknown'])
+unknown_percentage = round((unknown_count / total_listings * 100), 1)
+
+# Filter out unknown years
+df_known = df[df['Year_Category'] != 'Unknown'].copy()
+df_year_districts = df_known.groupby(['Dzielnica', 'Year_Category']).size().reset_index(name='Count')
+
+# Calculate percentages within each district
+df_year_districts['Total_by_District'] = df_year_districts.groupby('Dzielnica')['Count'].transform('sum')
+df_year_districts['Percentage'] = round((df_year_districts['Count'] / df_year_districts['Total_by_District'] * 100), 1)
+
+# Pivot for visualization
+df_viz = df_year_districts.pivot(index='Dzielnica', columns='Year_Category', values='Percentage').fillna(0)
+
+category_order = ['Pre-war', 'Post-war Reconstruction', 'Communist Era', 'Modern Poland', 'Contemporary', 'War Period (1939-1944)']
+df_viz = df_viz.reindex(columns=category_order, fill_value=0)
+
+fig, ax = plt.subplots(figsize=(14, 9))
+
+for i in range(len(df_viz.columns)):
+    color = 'gray' if i == len(df_viz.columns) - 1 else cmap(i)
+    
+    ax.barh(
+        df_viz.index, 
+        df_viz[df_viz.columns[i]], 
+        left=df_viz.iloc[:, :i].sum(axis=1) if i > 0 else 0, 
+        color=color,
+        label=df_viz.columns[i]
+    )
+
+# Add labels for segments > 5%
+for i in range(len(df_viz.columns)):
+    for j in range(len(df_viz.index)):
+        value = df_viz.iloc[j, i]
+        
+        if value > 5:
+            left_position = df_viz.iloc[j, :i].sum() if i > 0 else 0
+            x_position = left_position + value / 2
+            
+            ax.text(
+                x_position, j, s=f"{value:.0f}%",
+                va='center', ha='center', fontsize=10, 
+                color='white', font=poppins_light
+            )
+
+ax.spines[["top", "right", "bottom"]].set_visible(False)
+ax.get_xaxis().set_visible(False)
+ax.tick_params(axis='y', left=False)
+
+for tick in ax.get_yticklabels():
+    tick.set_font(poppins_light)
+    tick.set_fontsize(10)
+
+fig_text(
+    x=0.09, y=1.02,
+    s="<Contemporary Buildings> <dominate> Poznań's Rental Market",
+    size=24, font=poppins_light,
+    highlight_textprops=[
+        {"color": cmap(4), "font": poppins_bold},
+        {"color": "darkred", "font": poppins_bold}
+    ]
+)
+
+fig_text(
+    x=0.092, y=0.97,
+    s="Distribution of construction periods across districts",
+    size=16, font=poppins_light,
+)
+
+UNKNOWN_NOTE = f"Note: <{unknown_percentage}%> of listings did not specify construction year and were excluded. Percentages based on known dates only."
+fig_text(
+    x=0.1, y=0.005, s=UNKNOWN_NOTE, size=9, font=poppins_light,
+    highlight_textprops=[{"color": cmap(4), "font": poppins_bold}]
+)
+
+# Add period labels
+periods = [
+    ("Contemporary\n(greater than 2011)", 0.67, 0.87, cmap(4)),
+    ("Modern Poland\n(1990-2010)", 0.35, 0.87, cmap(3)),
+    ("Post-war\n(1945-1970)", 0.18, 0.87, cmap(1)),
+    ("Pre-war\n(before 1939)", 0.1, 0.13, cmap(0)),
+    ("Communist Era\n(1971-1989)", 0.22, 0.13, cmap(2))
+]
+
+for text, x, y, color in periods:
+    fig_text(
+        x=x, y=y, s=f"<{text.split('(')[0].strip()}>\n<{text.split('(')[1] if '(' in text else ''}>",
+        size=10, font=poppins_light, color=color,
+        highlight_textprops=[{"font": poppins_bold}, {"size": 8}]
+    )
+
+ax.set_xlim(0, 105)
+plt.tight_layout()
+plt.show()
+```
+
+### Floor Level Impact
+
+Rent remains **consistent** regardless of apartment floor level, suggesting that floor preference has minimal impact on pricing in Poznań's market.
+
+```{python}
+#| label: floor-analysis
+#| fig-cap: "Rental price distribution by floor level"
+#| code-summary: "Analyze floor level impact on pricing"
+
+df_floor = df.dropna(subset=["Mieszkanie Piętro", "Czynsz najmu"])
+df_floor = df_floor[df_floor["Mieszkanie Piętro"].apply(lambda x: str(x).isdigit())]
+df_floor["Mieszkanie Piętro"] = df_floor["Mieszkanie Piętro"].astype(int)
+
+fig, ax = plt.subplots(figsize=(12, 7))
+
+sns.boxplot(
+    x="Mieszkanie Piętro", y="Czynsz najmu", 
+    hue="Mieszkanie Piętro",
+    data=df_floor, 
+    palette=cmap,
+    legend=False
+)
+
+fig_text(
+    x=0.1, y=1, 
+    s="Rent Remains <Consistent> Regardless of Apartment Floor", 
+    fontsize=23, font=poppins_light,
+    highlight_textprops=[{"color": cmap(4), "font": poppins_bold}]
+)
+
+plt.xlabel("Floor Level", fontsize=12, font=poppins_light)
+plt.ylabel("Monthly Rent (PLN)", fontsize=12, font=poppins_light)
+
+ax.spines[['top', 'right']].set_visible(False)
+
+for tick in ax.get_xticklabels():
+    tick.set_font(poppins_light)
+    tick.set_fontsize(10)
+
+for tick in ax.get_yticklabels():
+    tick.set_font(poppins_light)
+    tick.set_fontsize(10)
+
+plt.tight_layout()
+plt.show()
+```
+
+## Market Structure
+
+### Listing Source Analysis
+
+**Professional Agencies vastly outnumber Private Landlords** in Poznań's rental market, indicating a highly professionalized rental ecosystem.
+
+```{python}
+#| label: listing-sources
+#| fig-cap: "Distribution of listing sources (agencies vs. private landlords)"
+#| code-summary: "Analyze market structure by listing source"
+
+source_counts = df["Typ ogłoszeniodawcy"].value_counts()
+
+fig, ax = plt.subplots(figsize=(12, 7))
+
+source_counts.plot(kind='bar', color=[cmap(5), cmap(3), cmap(1)])
+
+fig_text(
+    x=0.35, y=0.9, 
+    s="<Professional Agencies> \nVastly Outnumber <Private Landlords>", 
+    fontsize=28, font=poppins_light,
+    highlight_textprops=[
+        {"color": cmap(4), "font": poppins_bold},
+        {"color": "darkred", "font": poppins_bold},
+    ]
+)
+
+plt.ylabel("Number of Listings", fontsize=12, font=poppins_light)
+ax.set_xlabel(None)
+ax.spines[['top', 'right']].set_visible(False)
+
+for tick in ax.get_xticklabels():
+    tick.set_font(poppins_light)
+    tick.set_fontsize(10)
+
+for tick in ax.get_yticklabels():
+    tick.set_font(poppins_light)
+    tick.set_fontsize(10)
+
+plt.xticks(rotation=0)
+plt.tight_layout()
+plt.show()
+```
+
+## Cost Structure Analysis
+
+### Heating Infrastructure Impact
+
+**Heating Infrastructure drives Administrative Cost Structure**. Different heating systems significantly impact the administrative costs, with some heating types commanding premium charges.
+
+```{python}
+#| label: heating-costs
+#| fig-cap: "Average administrative rent by heating type"
+#| code-summary: "Analyze heating infrastructure impact on costs"
+
+df_filtered = df.dropna(subset=["Czynsz administracyjny", "Ogrzewanie"])
+df_filtered = df_filtered[
+    (df_filtered["Czynsz administracyjny"] > 0) &
+    (df_filtered["Czynsz administracyjny"] < 10000)
+]
+
+avg_admin_rent = (
+    df_filtered
+    .groupby("Ogrzewanie")["Czynsz administracyjny"]
+    .mean()
+    .sort_values(ascending=False)
+)
+
+fig, ax = plt.subplots(figsize=(14, 9))
+
+bars = ax.bar(
+    range(len(avg_admin_rent)), 
+    avg_admin_rent.values,
+    color=[cmap_unreversed(i) for i in range(len(avg_admin_rent))]
+)
+
+fig_text(
+    x=0.44, y=0.9, 
+    s="<Heating Infrastructure> \nDrives Administrative Cost Structure", 
+    fontsize=23, font=poppins_light,
+    highlight_textprops=[{"color": cmap(4), "font": poppins_bold}]
+)
+
+ax.set_xticks(range(len(avg_admin_rent)))
+ax.set_xticklabels(avg_admin_rent.index, rotation=0, ha='center', fontsize=14, font=poppins_light)
+
+# Add value labels on bars
+for i, bar in enumerate(bars):
+    height = bar.get_height()
+    ax.text(bar.get_x() + bar.get_width()/2., height + 5,
+            f'{height:.0f}', ha='center', va='bottom', 
+            fontsize=12, font=poppins_light, color='black')
+
+ax.spines[["top", "right", "left"]].set_visible(False)
+ax.grid(axis='y', alpha=0.3, linestyle='-', linewidth=0.5)
+ax.set_axisbelow(True)
+ax.get_yaxis().set_visible(False)
+
+for tick in ax.get_xticklabels():
+    tick.set_font(poppins_light)
+    tick.set_fontsize(10)
+
+plt.tight_layout()
+plt.show()
+```
+
+## Amenities Analysis
+
+### Equipment Correlation with Rent
+
+**Modern Amenities show stronger links to premium pricing than basic features**. This analysis reveals which amenities correlate most strongly with higher rental prices.
+
+```{python}
+#| label: equipment-correlation
+#| fig-cap: "Correlation between equipment amenities and rental prices"
+#| code-summary: "Analyze equipment impact on rent pricing"
+
+def parse_equipment_safe(x):
+    try:
+        return ast.literal_eval(x) if isinstance(x, str) else []
+    except (ValueError, SyntaxError):
+        return []
+
+df_eq = df.dropna(subset=["Wyposażenie", "Czynsz administracyjny"]).copy()
+df_eq["Wyposażenie"] = df_eq["Wyposażenie"].apply(parse_equipment_safe)
+
+# Create one-hot encoding for equipment
+eq_dummies = df_eq["Wyposażenie"].apply(pd.Series).stack().reset_index(level=1, drop=True).to_frame("item")
+eq_dummies["present"] = 1
+df_eq = df_eq.drop("Wyposażenie", axis=1).join(eq_dummies)
+
+df_eq = df_eq.pivot_table(index=df_eq.index, columns="item", values="present", fill_value=0).join(df_eq["Czynsz najmu"])
+
+correlation = df_eq.corr(numeric_only=True)["Czynsz najmu"].drop("Czynsz najmu").sort_values(ascending=False)
+
+fig, ax = plt.subplots(figsize=(10, 10))
+
+heatmap = sns.heatmap(
+    correlation.to_frame(),
+    annot=True,
+    cmap=cmap_x85,
+    vmin=correlation.min(),
+    vmax=correlation.max(),
+    cbar_kws={'label': 'Correlation with Rent'},
+    fmt='.3f',
+    annot_kws={'fontsize': 10, 'font': poppins_light},
+)
+
+fig_text(
+    x=0.15, y=1,
+    s="<Modern Amenities> Show <Stronger Link> \nto Premium Pricing Than <Basic Features>", 
+    fontsize=26, font=poppins_light,
+    highlight_textprops=[
+        {"color": cmap_x85(7), "font": poppins_bold},
+        {"color": cmap(4), "font": poppins_bold},
+        {"color": cmap_x85(1), "font": poppins_bold},
+    ]
+)
+
+ax.set_xlabel("", fontsize=12, font=poppins_light)
+
+for tick in ax.get_yticklabels():
+    tick.set_fontproperties(poppins_light)
+    tick.set_fontsize(10)
+
+for tick in ax.get_xticklabels():
+    tick.set_fontproperties(poppins_light)
+    tick.set_fontsize(10)
+
+cbar = heatmap.collections[0].colorbar
+cbar.ax.set_ylabel('Correlation with Rent', font=poppins_light, fontsize=12)
+
+for tick in cbar.ax.get_yticklabels():
+    tick.set_fontproperties(poppins_light)
+    tick.set_fontsize(10)
+
+for spine in ax.spines.values():
+    spine.set_visible(False)
+
+fig.subplots_adjust(left=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+### Equipment Prevalence
+
+**Basic Appliances dominate listings, Premium Features rare**. This analysis shows the distribution of amenities across all listings.
+
+```{python}
+#| label: equipment-prevalence
+#| fig-cap: "Prevalence of different amenities across listings"
+#| code-summary: "Show distribution of amenities"
+
+top_items = df_eq.drop(columns="Czynsz najmu").sum().sort_values(ascending=False)
+
+fig, ax = plt.subplots(figsize=(12, 6))
+
+bars = ax.bar(
+    range(len(top_items)), 
+    top_items.values,
+    color=[cmap_x85(i/len(top_items)) for i in range(len(top_items))]
+)
+
+fig_text(
+    x=0.07, y=1, 
+    s="<Basic Appliances> Dominate Listings, <Premium Features> Rare", 
+    fontsize=22, fontproperties=poppins_light,
+    highlight_textprops=[
+        {"color": cmap_x85(1), "font": poppins_bold},
+        {"color": cmap_x85(8), "font": poppins_bold},
+    ]
+)
+
+ax.set_xticks(range(len(top_items)))
+ax.set_xticklabels(top_items.index, rotation=45, ha='right')
+
+for tick in ax.get_xticklabels():
+    tick.set_fontproperties(poppins_light)
+    tick.set_fontsize(10)
+
+for tick in ax.get_yticklabels():
+    tick.set_fontproperties(poppins_light)
+    tick.set_fontsize(10)
+
+ax.spines[["top", "right"]].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+## Security Analysis
+
+### Security Features Impact
+
+**Security Features show minimal impact on rental prices** despite their growing prevalence in the market.
+
+```{python}
+#| label: security-correlation
+#| fig-cap: "Correlation between security features and rental prices"
+#| code-summary: "Analyze security feature impact"
+
+def parse_security_flex(x):
+    if isinstance(x, str):
+        try:
+            parsed = ast.literal_eval(x)
+            if isinstance(parsed, list):
+                return parsed
+            else:
+                return [parsed]  
+        except:
+            return [x] 
+    elif isinstance(x, list):
+        return x
+    else:
+        return []
+
+df_sec = df.dropna(subset=["Bezpieczeństwo", "Czynsz najmu"]).copy()
+df_sec["Bezpieczeństwo"] = df_sec["Bezpieczeństwo"].apply(parse_security_flex)
+
+# One-hot encoding for security features
+sec_dummies = df_sec["Bezpieczeństwo"].apply(pd.Series).stack().reset_index(level=1, drop=True).to_frame("item")
+sec_dummies["present"] = 1
+df_sec = df_sec.drop("Bezpieczeństwo", axis=1).join(sec_dummies)
+
+df_sec = df_sec.pivot_table(index=df_sec.index, columns="item", values="present", fill_value=0).join(df_sec["Czynsz najmu"])
+
+correlation = df_sec.corr(numeric_only=True)["Czynsz najmu"].drop("Czynsz najmu").sort_values(ascending=False)
+
+fig, ax = plt.subplots(figsize=(10, 7))
+
+heatmap = sns.heatmap(
+    correlation.to_frame(),
+    annot=True,
+    cmap=cmap,
+    vmin=correlation.min(),
+    vmax=correlation.max(),
+    cbar_kws={'label': 'Correlation with Rent'},
+    fmt='.3f',
+    annot_kws={'fontsize': 10, 'font': poppins_light}
+)
+
+fig_text(
+    x=0.08, y=1.05, 
+    s="Security Features Show \n<Minimal Impact> on Rental Prices", 
+    fontsize=28, fontproperties=poppins_light,
+    highlight_textprops=[{"color": cmap(5), "font": poppins_bold}]
+)
+
+ax.set_xlabel("", fontsize=12, fontproperties=poppins_light)
+
+for tick in ax.get_yticklabels():
+    tick.set_fontproperties(poppins_light)
+    tick.set_fontsize(10)
+
+for tick in ax.get_xticklabels():
+    tick.set_fontproperties(poppins_light)
+    tick.set_fontsize(10)
+
+cbar = heatmap.collections[0].colorbar
+cbar.ax.set_ylabel('Correlation with Rent', fontproperties=poppins_light, fontsize=12)
+
+for tick in cbar.ax.get_yticklabels():
+    tick.set_fontproperties(poppins_light)
+    tick.set_fontsize(10)
+
+for spine in ax.spines.values():
+    spine.set_visible(False)
+
+plt.tight_layout()
+plt.show()
+```
+
+### Security vs. Non-Security Rent Comparison
+
+Despite weak correlation, **secured properties command higher rents** when comparing median values.
+
+```{python}
+#| label: security-boxplot
+#| fig-cap: "Rent distribution: secured vs. non-secured properties"
+#| code-summary: "Compare rent levels for secured vs non-secured properties"
+
+def is_secured(f):
+    try:
+        if isinstance(f, str):
+            f = ast.literal_eval(f)
+        if isinstance(f, list):
+            return int(any("monitoring" in x.lower() or "teren zamknięty" in x.lower() for x in f if isinstance(x, str)))
+    except:
+        return 0
+    return 0
+
+df["czy_strzezone"] = df["Bezpieczeństwo"].apply(is_secured)
+
+fig, ax = plt.subplots(figsize=(10, 7))
+
+box_colors = [cmap(1), cmap(5)]
+boxplot = ax.boxplot(
+    [df[df["czy_strzezone"] == 0]["Czynsz najmu"].dropna(),
+     df[df["czy_strzezone"] == 1]["Czynsz najmu"].dropna()],
+    patch_artist=True,
+    tick_labels=["Not Secured", "Secured"]
+)
+
+for patch, color in zip(boxplot['boxes'], box_colors):
+    patch.set_facecolor(color)
+    patch.set_alpha(0.9)
+
+fig_text(
+    x=0.1, y=1, 
+    s="<Secured Properties> \nCommand <Higher Rents> Despite Weak Correlation", 
+    fontsize=23, fontproperties=poppins_light,
+    highlight_textprops=[
+        {"color": cmap(5), "font": poppins_bold},
+        {"color": cmap(5), "font": poppins_bold},
+    ]
+)
+
+ax.set_ylabel("Monthly Rent (PLN)", fontsize=12, font=poppins_light)
+
+for tick in ax.get_xticklabels():
+    tick.set_fontproperties(poppins_light)
+    tick.set_fontsize(10)
+
+for tick in ax.get_yticklabels():
+    tick.set_fontproperties(poppins_light)
+    tick.set_fontsize(10)
+
+ax.spines[["top", "right"]].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+### Security Feature Market Penetration
+
+**Security Features becoming standard** - Nearly half of all listings now include security features.
+
+```{python}
+#| label: security-prevalence
+#| fig-cap: "Market penetration of security features"
+#| code-summary: "Show prevalence of security features"
+
+def has_security(x):
+    if isinstance(x, str):
+        return int("monitoring" in x.lower() or "teren zamknięty" in x.lower())
+    if isinstance(x, list):
+        return int(any("monitoring" in i.lower() or "teren zamknięty" in i.lower() for i in x if isinstance(i, str)))
+    return 0
+
+df["czy_strzezone"] = df["Bezpieczeństwo"].apply(has_security)
+counts = df["czy_strzezone"].value_counts().rename(index={1: "Secured", 0: "Not secured"})
+
+fig, ax = plt.subplots(figsize=(12, 7))
+
+bar_colors = [cmap(5), cmap(1)]
+bars = ax.bar(counts.index, counts.values, color=bar_colors, alpha=0.9, width=0.6)
+
+# Add value labels on bars
+for i, bar in enumerate(bars):
+    height = bar.get_height()
+    ax.text(bar.get_x() + bar.get_width()/2., height + height*0.01,
+            f'{int(height):,}', ha='center', va='bottom', 
+            fontproperties=poppins_light, fontsize=10)
+
+fig_text(
+    x=0.1, y=1.1, 
+    s="<Security Features Becoming Standard> \nIn Rental Market <Nearly half> of listings is <secured>", 
+    fontsize=28, fontproperties=poppins_light,
+    highlight_textprops=[
+        {"color": cmap(5), "font": poppins_bold},
+        {"color": cmap(1), "font": poppins_bold},
+        {"color": cmap(1), "font": poppins_bold},
+    ]
+)
+
+for tick in ax.get_xticklabels():
+    tick.set_fontproperties(poppins_light)
+    tick.set_fontsize(10)
+
+for tick in ax.get_yticklabels():
+    tick.set_fontproperties(poppins_light)
+    tick.set_fontsize(10)
+
+ax.spines[["top", "right", "left"]].set_visible(False)
+ax.get_yaxis().set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+## Key Findings & Investment Recommendations
+
+### Market Summary
+
+Based on this comprehensive analysis of Poznań's rental market, several key insights emerge:
+
+**Market Structure:**
+
+- **Compact living dominates**: 53% of properties are 2-room apartments averaging 40-50 m²
+- **Professional market**: Agencies vastly outnumber private landlords
+- **Price concentration**: Most rents fall in the 2,000-3,000 PLN range
+
+**Geographic Patterns:**
+
+- **Stare Miasto** commands premium prices but holds 29% market share
+- **Grunwald** offers largest apartments with highest deposits
+- **Clear market segmentation** by district with distinct pricing tiers
+
+**Investment Opportunities:**
+
+- **Premium segment underexplored**: Limited supply of 80+ m² properties
+- **Modern amenities matter**: Dishwashers and AC show strongest rent correlation
+- **Security features standard**: Nearly half of listings include security, becoming baseline expectation
+
+**Cost Drivers:**
+
+- **Heating infrastructure** significantly impacts administrative costs
+- **Contemporary buildings** dominate the rental stock
+- **Floor level has minimal impact** on pricing
+
+This analysis positions Poznań as a stable, efficient rental market with clear opportunities for strategic investment in underserved premium segments while maintaining strong fundamentals in the core compact living sector.
