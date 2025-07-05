@@ -14,9 +14,9 @@ website:
         text: "Report"
     right:
       - icon: github
-        href: https://github.com/yourusername/poznan-rental-analysis  # Update with your repo URL
+        href: https://github.com/kvbek/poznan-rental-analysis
   page-footer:
-    center: "© 2025 Jakub Marciniak | Business Intelligence Developer"
+    center: "© 2025 Jakub Marciniak"
 
 format:
   html:
